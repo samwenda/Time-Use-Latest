@@ -1,0 +1,549 @@
+rm(list = ls())
+library(readstata13)  #for reading the stata files
+library(dplyr)  #data manipulation
+library(haven)##foreign 
+library(htmlTable)##html tables
+library(magrittr)  #manipulate
+library(loose.rock)  #for proper changing of the string cases
+
+df1<- read.dta13("C:/Users/user/Desktop/TimeuseData/fdata/tus_activities.dta")
+names(df1)
+head(df1$t03,50)
+
+df2 <- df1[, c(1:27,225:257,1887:1899)]
+b<-head(df2)
+View(b)
+attach(df2)
+k<-head(df2)
+View(k)
+##
+df2$agecat[df1$b05_years<15] <- "<15"
+df2$agecat[15<=df1$b05_years & df1$b05_years<=24 ] <- "15-24"
+df2$agecat[25<=df1$b05_years & df1$b05_years<=44 ] <- "25-44"
+df2$agecat[45<=df1$b05_years & df1$b05_years<=54 ] <- "45-54"
+df2$agecat[55<=df1$b05_years & df1$b05_years<=64 ] <- "55-64"
+df2$agecat[df1$b05_years>=65] <- "65+"
+
+##filter if age cat is less than 15 years
+a1<-df2 %>% filter(b05_years<15)
+#View(a1)
+###age group and gender
+df3<-df2 %>% group_by(b02,agecat, b04) %>% summarise()
+table(df3$agecat, df3$b04) %>% addmargins() %>% htmlTable()
+
+##Age category=agecat, gender=b04 category of work=t08 and name of the person=b02
+df4<-df2 %>% group_by(b02,agecat,b04,t08)%>% summarise()
+
+
+
+d2<-df2 %>% 
+  group_by(t08,b04)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05))%>% as.data.frame() %>% htmlTable()
+d2
+
+d3<-df2 %>% filter(is.na(t08))
+
+
+#########################
+#method 1
+d2<-df2 %>% 
+  group_by(t08,b04)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=n())
+d2
+d3<-df2 %>%   
+  group_by(b02,t08,b04) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+d4<-d3 %>% group_by(t08,b04)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+
+##geat table in HTML and you copy paste in excel
+d5<- d4 %>% left_join(d2, by=c("t08", "b04"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hour.in.activ<-round((d5$average.min.in.activ/60),1)
+d5 %>% as.data.frame() %>% 
+  #select(t08,b04,no.of.people.in.activity,average.min.in.activ,average.hour.in.activ) %>% #if you wish to see number of ppl who reported this
+  select(t08,b04,average.min.in.activ,average.hour.in.activ) %>%   ##avoid reporting number of people in activity
+  rename(Main_Activity=t08,Gender=b04)%>%
+  # mutate(Residence=recode(Residence,'1'="Rural",'2'="Urban")) %>%
+  htmlTable()
+
+###----------------------------------------------
+
+d2<-df2 %>% 
+  group_by(t08,b04,t02)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df1 %>%   
+  group_by(b02,t08,b04,t02) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,t02)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","t02"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>%
+  rename(Main_activity=t08, Gender=b04, Day.of.week=t02)%>%
+  as.data.frame() %>% 
+  select(Main_activity, Gender, Day.of.week,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+
+################------------------------------------------------------------
+#Table 4 starts here; activity, sex: marital status
+
+
+###
+##create new categories for marital status according to suggestions by team
+df2$b07_1<-df2$b07
+df2$b07_1<-as.character(df2$b07_1)
+df2$b07_1[df2$b07_1=="MARRIED MONOGAMOUS" | df2$b07_1=="MARRIED POLYGAMOUS" | df2$b07_1=="LIVING TOGETHER"] <- "married(mono.poly.living_together)"
+df2$b07_1[df2$b07_1=="SEPARATED" | df2$b07_1=="DIVORCED" | df2$b07_1=="WIDOW OR WIDOWER" ] <- "not.married(divorced.separated.widow_widower"
+df2$b07_1[df2$b07_1=="NEVER MARRIED"]<-"never.married" 
+df2$b07_1<-as.factor(df2$b07_1)
+table(df2$b07_1)
+
+d2<-df2 %>% 
+  group_by(t08,b04,b07_1)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,b04,b07_1) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,b07_1)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","b07_1"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% as.data.frame()%>%
+  rename(Activity=t08,sex=b04,marital.status=b07_1)%>%
+  select(Activity,sex,marital.status,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+#flag if marital status is missing
+d55 <-df2 %>% filter(is.na(b07))
+View(d55)
+
+####
+#Table 4b starts here; activity, without _sex: marital status
+d2<-df2 %>% 
+  group_by(t08,b07_1)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,b07_1) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b07_1)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08","b07_1"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% as.data.frame()%>%
+  rename(Activity=t08,marital.status=b07_1)%>% 
+  select(Activity,marital.status,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable()
+
+
+#-------------------------------------------------------------------------------------------------------------
+
+#Table 5 starts here; activity, gender: age category 12-17, 18-34, 35 and above
+###
+d2<-df2 %>% 
+  group_by(t08,b04,agecat)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,b04,agecat) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,agecat)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","agecat"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 
+d5 %>% as.data.frame()%>%
+  rename(Activity=t08,sex=b04)%>% 
+  select(Activity,sex,agecat,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+#-------------------------------------------------------------------------------------------------------------------------------------table
+d2<-df2 %>% 
+  group_by(t08,b04,t06)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df1 %>%   
+  group_by(b02,t08,b04,t06) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,t06)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+
+
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","t06"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% as.data.frame()%>%
+  rename(Activity=t08,sex=b04,who.did.you.do.it.for=t06)%>% 
+  select(Activity,sex,who.did.you.do.it.for,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+####-------------------------------------------------------------------------------------------------------------------------------------table
+
+d2<-df2 %>% 
+  group_by(t08,b04,t07)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,b04,t07) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,t07)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","t07"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% as.data.frame() %>%
+  rename(Activity=t08,sex=b04,was.it.for.pay=t07)%>% 
+  select(Activity,sex,was.it.for.pay,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+#-------------------------------------------------------------------------------------------------------------------------------------table
+#Table 7 starts here; activity, place of occurence and without_sex
+###
+d2<-df2 %>% 
+  group_by(t08,t10)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,t10) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,t10)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08","t10"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% rename(Activity=t08,place.activity.occur=t10)%>% 
+  select(Activity,place.activity.occur,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+#-------------------------------------------------------------------------------------------------------------------------------------table
+d2<-df2 %>% 
+  group_by(t08,b04,t10)%>% 
+  summarise(sum.tot.time=sum(t05),no.of.occurence.in.data=length(t05)) 
+d2  #there people who never included day of the week
+##number of respodents in terms of gender, day of the week, and the said activity and the hours they spend on the main activity
+d3<-df2 %>%   
+  group_by(b02,t08,b04,t10) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity
+d4<-d3 %>% group_by(t08,b04,t10)%>%
+  summarise(no.of.people.in.activity=n())
+d4
+d5<- d4 %>% left_join(d2, by=c("t08", "b04","t10"))
+d5$average.min.in.activ<-round((d5$sum.tot.time/d5$no.of.people.in.activity),0) #divide by 60 minutes
+d5$average.hours.in.activ<-round(d5$average.min.in.activ/60,0)
+d5 %>% rename(Activity=t08,sex=b04,place.activity.occur=t10)%>% 
+  select(Activity,sex,place.activity.occur,average.min.in.activ,average.hours.in.activ) %>%
+  htmlTable
+
+
+####-------------------------------------------------------------------------------------
+#Table 8 starts here; r09_1, gender: r10__1 activity done alone by genderMALE
+d3<-df1 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__1) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__1)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__1==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.BY.SELF=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.BY.SELF,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__1)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__1==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.BY.SELF=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.BY.SELF,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__2) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__2)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__2==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.with.CHILDREN.BELOW.FIVE.YEARS=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.with.CHILDREN.BELOW.FIVE.YEARS,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#####for female
+#Table xxx starts here; t11, gender: t09__2 ,children 5years and below  FEMALE
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__2) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__2)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__2==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.BY.CHILDREN.BELOW.FIVE.YEARS=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.BY.CHILDREN.BELOW.FIVE.YEARS,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+######----------------ends here
+
+#Table xxx starts here; t11, gender: t09__3 ,children 5years to 17  MALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__3) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__3)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__3==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.between.FIVE.AND.SEVENTEEN.YEARS=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.between.FIVE.AND.SEVENTEEN.YEARS,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#####for female
+#Table xxx starts here; t11, gender: t09__3 ,children 5years to 17   FEMALE
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__3) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__3)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__3==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.between.FIVE.AND.SEVENTEEN.YEARS=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.between.FIVE.AND.SEVENTEEN.YEARS,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+######----------------ends here
+
+#Table xxx starts here; t11, gender: t09__4 ,with another household member  MALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__4) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__4)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__4==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.ANOTHER.HH.MEMBER=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.ANOTHER.HH.MEMBER,gender,no.of.people.in.activity)%>%
+  htmlTable()
+#Table xxx starts here; t11, gender: t09__4 ,with another household member  FEMALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__4) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__4)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__4==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.ANOTHER.HH.MEMBER=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.ANOTHER.HH.MEMBER,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#Table xxx starts here; t11, gender: t09__4 ,with a collegue  MALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__5) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__5)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__5==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.colleague=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.colleague,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#Table xxx starts here; t11, gender: t09__4 ,with a collegue  FEMALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__5) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__5)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__5==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.colleague=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.colleague,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#Table xxx starts here; t11, gender: t09__6 ,with a other known to the respodent  MALE
+
+### male
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__6) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__6)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__6==1) %>%
+  filter(b04=="Male")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.others=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.others,gender,no.of.people.in.activity)%>%
+  htmlTable()
+
+#Table xxx starts here; t11, gender: t09__6 ,with a other known to the respodent FEMALE
+
+### female
+
+d3<-df2 %>%  
+  filter(!is.na(t11)) %>% 
+  group_by(b02,t11,b04,t09__6) %>%  
+  summarise(no.of.occurence.in.hrs.per.person=n())# %>%arrange(desc(no.of.occurence.in.hrs)) ##add this if you want to sort in descening order
+d3
+#find the number of people involved in each activity top 5 activities by gender
+d3 %>% group_by(t11,b04,t09__6)%>%
+  summarise(no.of.people.in.activity=n())%>%
+  arrange(desc(no.of.people.in.activity))%>%
+  ungroup() %>%
+  filter(t09__6==1) %>%
+  filter(b04=="Female")%>%
+  slice(1,2,3,4,5)%>%
+  ungroup() %>%
+  rename(FIVE.TOP.specific.activity.R091.DONE.WITH.others=t11, gender=b04)%>%
+  select(FIVE.TOP.specific.activity.R091.DONE.WITH.others,gender,no.of.people.in.activity)%>%
+  htmlTable()
+###ends here
+
+df2 %>% 
+  select(tus_diary__id, t11) %>% ##select only the diary and the specific activities
+  filter(!is.na(t11)) %>%  ##filter any variable whhich is missing
+  group_by(tus_diary__id, t11) %>%  ##grouping by time in diary and the specific activity 
+  summarise(no.of.activities=n()) %>%  ##number of people reporting activities at that time
+  ungroup() %>%
+  group_by(tus_diary__id) %>%
+  arrange(desc(no.of.activities)) %>%  ## arrange the activities in descedning order within the group.
+  slice(1,2,3)%>% ##slice(1) for the top most activity; slice(1,2) for the two top most; slice(1,2,3) the third top most activity in that hour
+  ungroup()%>% ##ungroup from the main groupings
+  as.data.frame() %>% ###incase you want to write or merge twith other dataset
+  htmlTable()   #create a html table, copy to excel and unwrap, justify left
+
+
+
+
+
+
+
+
+
+
+
